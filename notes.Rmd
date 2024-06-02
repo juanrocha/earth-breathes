@@ -1,0 +1,171 @@
+---
+title: "Notes"
+output: html_notebook
+---
+
+
+
+## Data
+
+All data was downloaded from NASAs data portal. The two datasets downloaded are 
+the vegetation indexes from the MODIS [Terra]() and 
+[Aqua](https://lpdaac.usgs.gov/products/myd13a2v061/) missions at 1Km resolutions
+and 16 day time series. Combined, they become a weekly time series. Both are
+projected on a sinusoidal coordinate system.
+
+The scripts for downloading are at `~/Documents/Projects/DATA/LP_DAAC_Data_Pool/daac_data_download_r/`
+which uses `curl` and `wget` to iterate over the file structure on the [Data Pool](https://lpdaac.usgs.gov/tools/data-pool/)
+servers. Here are the links to the data used:
+
+- Terra: <https://e4ftl01.cr.usgs.gov/MOLT/MOD13A2.061/>
+- Aqua: <https://e4ftl01.cr.usgs.gov/MOLA/MYD13A2.061/>
+
+## Settings
+
+`GDAL` does not work out of the box anymore to read `hdf4` files. Trying to solve
+the problem, I found that the origin of the error is that the `brew install gdal`
+in new macs do not include the `hdf4` driver, see [here](https://github.com/rspatial/terra/issues/955).
+
+There are several solutions:
+
+- Install other tools that convert `hdf4` to `hdf5` or `netCDF`, a tutorial with an
+overview of options [here](https://pjbartlein.github.io/REarthSysSci/hdf5_intro.html#convert-an-hdf4-file-to-hdf5). 
+However, this means I would need to take ~3TB of data and duplicate files in memory
+for `hdf5` or `netCDF` that can be opened. Not optimal.
+- Another option is installing `gdal` from source, not from `homebrew`. The solution
+is described [here](https://devcodef1.com/news/1022780/gdal-using-hdf4-formats).
+However, it works with `gdal` versions <3.5, when one could install with `make`.
+Current versions of `gdal` do not allow that installation.
+
+So I opted for the second option:
+
+1. `hdf4` was downloaded from <https://portal.hdfgroup.org/documentation/>, they also
+have the tool `h4h5tools` but first I'm trying to make `gdal` compatible with `hdf4` native.
+The detailed instructions on how to install from source are found [here](https://github.com/HDFGroup/hdf4/blob/hdf4.3.0/release_notes/INSTALL_Auto.txt).
+2. The following libraries are required: `zlib`, `jpeg`, and `szlib`. The first two
+can be installed with `brew install zlib` or `jpeg`. The latter comes as part of
+`brew install libaec`.
+
+Do this before attempting to install gdal from source: Code to configure hdf4 library, from [here](https://github.com/HDFGroup/hdf4/blob/hdf4.3.0/release_notes/INSTALL_Auto.txt):
+
+```{bash eval = FALSE, echo = TRUE}
+./configure --with-zlib=/opt/homebrew/Cellar/zlib \
+            --with-jpeg=/opt/homebrew/Cellar/jpeg/9f/include \
+            --with-szlib=/opt/homebrew/Cellar/libaec/1.1.3/ \
+            --prefix=/opt/homebrew/Cellar/hdf4
+```
+
+
+
+3. Once `hdf4` is installed (in my case under `/opt/homebrew/Cellar/hdf4-hdf4.3.0/`)
+then on can download `gdal` source files from [gdal webiste](https://gdal.org/download.html).
+The instructions for setting it up are found [here](https://gdal.org/development/building_from_source.html#building-from-source).
+Once the file is downloaded and unpacking (decompressing), I put the folder under `/opt/homebrew/Cellar/gdal-3.8.5/`
+for convenience, so all the tools are under the same folder. 
+4. Before you start installation, some libraries were needed. The homebrew formula is [here](https://formulae.brew.sh/formula/gdal).
+Since I already had `gdal` I already had most of the dependencies. I had to install however
+`brew install boost`, `cmake`, `pkg-config`, and `swig`. They are needed when building
+from source.
+
+
+In the terminal go to the folder location
+
+```{bash eval = FALSE, echo = TRUE}
+cd gdal-{version}
+```
+
+Create a build directory and step into it:
+
+```{bash eval = FALSE, echo = TRUE}
+mkdir build
+cd build
+```
+
+From the build directory, configure CMake and install binaries. Reading the compiling
+instructions I had to modify a number of flags to make `hdf4` available to `gdal` 
+at compilation time. Here is the what I did:
+
+Notes: ` -DHDF4_LIBRARY:FILEPATH=/opt/homebrew/Cellar/hdf4/lib/libhdf4.a \` I had before `libhdf4.settings` at the end
+
+```{bash eval = FALSE, echo = TRUE}
+
+cmake -DCMAKE_DISABLE_FIND_PACKAGE_Arrow=ON \
+      -DGDAL_USE_LIBKML=OFF \
+      -DGDAL_USE_HDF4=ON \
+      -DHDF4_INCLUDE_DIR=/opt/homebrew/Cellar/hdf4/include \
+      -DHDF4_df_LIBRARY_RELEASE=/opt/homebrew/Cellar/hdf4/lib/libdf.a \
+      -DHDF4_df_LIBRARY_DEBUG=/opt/homebrew/Cellar/hdf4/lib/libdf.a \
+      -DHDF4_mfhdf_LIBRARY_RELEASE=/opt/homebrew/Cellar/hdf4/lib/libmfhdf.a \
+      -DHDF4_mfhdf_LIBRARY_DEBUG=/opt/homebrew/Cellar/hdf4/lib/libmfhdf.a \
+      -DHDF4_szip_LIBRARY_RELEASE=/opt/homebrew/Cellar/libaec/1.1.3/lib/libsz.a \
+      -DHDF4_szip_LIBRARY_DEBUG=/opt/homebrew/Cellar/libaec/1.1.3/lib/libsz.a \
+      -DSQLite3_INCLUDE_DIR=/opt/homebrew/Cellar/sqlite/3.45.3/include \
+      -DSQLite3_LIBRARY=/opt/homebrew/Cellar/sqlite/3.45.3/lib/libsqlite3.a \
+      -DPROJ_INCLUDE_DIR=/opt/homebrew/Cellar/proj/9.4.0/include \
+      -DPROJ_LIBRARY_RELEASE=/opt/homebrew/Cellar/proj/9.4.0/lib/libproj.a \
+      -DSWIG_EXECUTABLE=/opt/homebrew/bin \
+      -DGDAL_SET_INSTALL_RELATIVE_RPATH=ON \
+      -DCMAKE_INSTALL_PREFIX=/opt/homebrew/Cellar/gdal/3.9.0/ ..
+
+```
+
+Options removed for now:
+```{bash eval = FALSE}
+      -DHDF4_LIBRARY:FILEPATH=/opt/homebrew/Cellar/hdf4/lib/libhdf4.a \ 
+      -DGDAL_ENABLE_DRIVER_HDF4:BOOL=ON \
+```
+
+
+According to the instructions, every time I tried something new, it is recommended to 
+delete the file `CMakeCache.txt` to restart fresh.
+After this, I go back to the instructions: `-DGDAL_SET_INSTALL_RELATIVE_RPATH=ON \`
+
+```{bash eval = FALSE, echo = TRUE}
+cmake ..
+cmake --build .
+sudo cmake --build . --target install
+
+## if unsuccessful
+# sudo cmake --build . --target uninstall
+```
+
+Making gdal visible to compilers:
+
+```{bash eval = FALSE, echo = TRUE}
+echo 'export PATH="/opt/homebrew/Cellar/gdal/3.9.0/lib:$PATH"' >> ~/.zshrc
+echo 'export PATH="/opt/homebrew/bin/proj:$PATH"' >> ~/.zshrc
+
+
+<!-- export LDFLAGS="-L/opt/homebrew/Cellar/gdal-3.8.5/lib" -->
+<!-- export CPPFLAGS="-I/opt/homebrew/Cellar/gdal-3.8.5/lib/include" -->
+<!-- export PKG_CONFIG_PATH="/opt/homebrew/Cellar/gdal-3.8.5/lib/pkgconfig" -->
+```
+
+
+```
+## new path
+/opt/homebrew/Cellar/gdal-3.8.5/lib/bin:/opt/homebrew/Cellar/gdal-3.8.5/lib/bin:/usr/local/bin:/opt/homebrew/opt/jpeg/bin:/Users/juanrocha/.juliaup/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/var/folders/jm/d3760lfd491gkrb4_gll_n_w0000gn/T/RtmpyZAL9t/rstudio/terminal:/var/folders/jm/d3760lfd491gkrb4_gll_n_w0000gn/T/RtmpUPvm3b/rstudio/terminal:/var/folders/jm/d3760lfd491gkrb4_gll_n_w0000gn/T/Rtmpp5lRkj/rstudio/terminal:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/Users/juanrocha/Applications/quarto/bin:/Library/TeX/texbin:/usr/texbin:/Applications/RStudio.app/Contents/Resources/app/quarto/bin:/Applications/RStudio.app/Contents/Resources/app/bin/postback
+
+
+## old path:
+/opt/homebrew/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Users/juanrocha/Applications/quarto/bin:/Library/TeX/texbin:/usr/texbin:/Applications/RStudio.app/Contents/Resources/app/quarto/bin:/Applications/RStudio.app/Contents/Resources/app/bin/postback
+
+Sys.setenv(PATH = "/opt/homebrew/Cellar/gdal-3.8.5/lib/bin:/opt/homebrew/Cellar/gdal-3.8.5/lib/bin:/usr/local/bin:/opt/homebrew/opt/jpeg/bin:/Users/juanrocha/.juliaup/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/var/folders/jm/d3760lfd491gkrb4_gll_n_w0000gn/T/RtmpyZAL9t/rstudio/terminal:/var/folders/jm/d3760lfd491gkrb4_gll_n_w0000gn/T/RtmpUPvm3b/rstudio/terminal:/var/folders/jm/d3760lfd491gkrb4_gll_n_w0000gn/T/Rtmpp5lRkj/rstudio/terminal:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/Users/juanrocha/Applications/quarto/bin:/Library/TeX/texbin:/usr/texbin:/Applications/RStudio.app/Contents/Resources/app/quarto/bin:/Applications/RStudio.app/Contents/Resources/app/bin/postback)
+
+Sys.setenv(PROJ_LIB = "/opt/homebrew/bin/proj")
+```
+
+
+Then I need to reinstall R packages that depend on GDAL indicating where is the library. 
+The default flag comes predefined to work with homebrew (see instructions [here](https://github.com/rspatial/terra)),
+but I have previously copied the `libgdal.dylib` links from `Cellar/gdal/3.9.0/build/` or `lib` to `(brew --prefix)/lib/`, where `brew --prefix` is `opt/homebrew/`.
+
+```{r eval = FALSE, echo = TRUE}
+# re-install from github
+remotes::install_github("rspatial/terra", configure.args = "--with-proj-lib=$(brew --prefix)/lib/")
+
+# re-install from CRAN
+#install.packages("terra", type = "source", configure.args = "--with-proj-lib=$(brew --prefix)/lib/")
+```
+
+J240523: The problem persist. I do have `gdal` now and it recognizes it is the 3.9 version. However the relative paths and teh LC_RPATHS are not found. This are the paths that link PROJ library and others. I suspect there is an error in the way I install gdal, it finishe, but it does not create the right links to the dependent libraries.
