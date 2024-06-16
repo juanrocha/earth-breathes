@@ -1,11 +1,11 @@
 library(tidyverse)
 library(fs)
 library(tictoc)
-library(terra)
-library(stars)
+# library(terra)
+#library(stars)
 library(gdalcubes)
-gdalcubes_options(parallel = 12)
-
+# gdalcubes_options(parallel = 12)
+gdalcubes_options(debug = TRUE)
 
 #### Files to read ####
 fls <- dir_ls("~/Documents/Projects/DATA/LP_DAAC_Data_Pool/daac_data_download_r/MYD13A2-061/") |>
@@ -17,7 +17,8 @@ fls <- tibble(
 
 tic()
 fls <- fls |>
-    mutate(grid = str_sub(files, start = 110L, end = 115L))
+    mutate(grid = str_sub(files, start = 110L, end = 115L),
+           date = str_sub(files, 102L, 108L) |> as.Date("%Y%j"))
 toc() #0.3s
 
 tic()
@@ -39,8 +40,11 @@ x <- fls |> filter(grid == "h10v08") |> pull(files)
 
 ## It does not work with stars: it seems not good with hdf4 files, and I don't
 ## see how to twick the gdal options
-y <- stars::read_stars(
-    .x = fls |> filter(grid == "h10v08") |> slice(10) |> pull(files),
+
+x <- read_ncdf(fls$files[100], curvilinear = c("lon", "lat"), ignore_bounds = TRUE)
+
+y <- read_stars(
+    .x = fls |> filter(grid == "h10v08") |> slice(100) |> pull(files),
     sub = 1, driver = "HDF4",
     quite = TRUE, proxy = TRUE
 )
@@ -54,9 +58,13 @@ plot(r[[1]]) # fails
 
 x <- terra::rast(
     x = fls |> filter(grid == "h10v08") |> slice(10) |> pull(files),
-    drivers = "HDF4", lyrs = 1)
+    drivers = "HDF4", lyrs = 1, raw = TRUE,
+    crs = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs")
 
-crs(x) |> cat() # coordinate reference system
+s <- sds(fls |> filter(grid == "h10v08") |> slice(10) |> pull(files))
+
+s[1]
+crs(x) <- "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs"# |> cat() # coordinate reference system
 dim(x) # 1200 x 1200 pxls, 12 layers
 nlyr(x)
 ncell(x)
@@ -64,11 +72,14 @@ res(x) # resolution
 x |> names()
 
 x
-
+# I think the problem is that rast creates a pointer to the data and the coordinate system
+# is not correct, the corner coordinates do not match with Colombia
+# see: https://gis.stackexchange.com/questions/199059/understanding-gdal-error-1-too-many-points-failed-to-transform
+describe(fls |> filter(grid == "h10v08") |> slice(10) |> pull(files))
 
 x[10,10]
 
-plot(x) # fails
+plot(s[1]) # fails
 
 #### hdf5 ####
 # I will need to convert all files to HDF5 or NetCDF: https://pjbartlein.github.io/REarthSysSci/hdf5_intro.html
@@ -85,7 +96,7 @@ collection_formats()
 # Brazil Amazon h11v09
 tic()
 x <- create_image_collection(
-    files = fls |> filter(grid == "h11v09") |> pull(files),
+    files = fls |> filter(grid == "h10v08") |> pull(files),
     format = "MxD13A2")
 toc() #98s
 
@@ -99,12 +110,15 @@ tic()
 v <- cube_view(
     extent = x,
     # this specs follows the info on the MODIS website
-    nx = 1200, ny = 1200, nt = 552,
-    srs = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs", # sinusoidal projection
+    #nx = 1200, ny = 1200, nt = 485, srs = "ESRI:54008", # same sinusoidal but in short code
+    # lower res
+    dx = 500, dy = 500, dt = "P16D",
+    aggregation = "median", resampling = "average",
+    srs = "ESRI:54008", # same sinusoidal but in short code: "ESRI:54008"
+    #srs = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs", # sinusoidal projection
     # this specs the tutorial of gdalcubes
     # srs = "EPSG:3857", # WGS84 / pseudo mercator projection
     # dx = 5000, dy = 5000, dt = "P16D"
-    aggregation = "mean", resampling = "bilinear"
     )
 toc() #0.003s
 v
@@ -114,8 +128,8 @@ dc
 
 ## see gdalcubes_selection
 ## subset cubes: object["band", "time", "x", "y"]
-dc["NIR", c("2000-02-18T00:00:00","2024-02-02T00:07:11") , c(200), c(200)] |> plot() ## All zeroes, why?
-
+dc["NDVI", c("2000-02-18T00:00:00","2024-02-02T00:07:11") , c(200), c(200)] |> plot() ## All zeroes, why?
+dc["EVI", c("2002-07-04") , , ] |> plot()
 
 tic()
 resp <- dc |>
@@ -130,3 +144,10 @@ resp |> plot(key.pos = 1)
 toc() # 9.4s
 
 x |> class()
+
+tic()
+dc |>
+    select_bands("NDVI") |>
+    reduce_time("median(NDVI)") |>
+    plot(col=heat.colors, key.pos=1)
+toc()

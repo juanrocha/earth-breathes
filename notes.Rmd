@@ -109,11 +109,17 @@ cmake -DCMAKE_DISABLE_FIND_PACKAGE_Arrow=ON \
 
 ```
 
-Options removed for now:
+Options removed for now, it works witouth them, it does install and enable manimupation 
+from the command line. It does however not work when trying to link to libraries in R, I 
+still get the error of `dyld[4539]: Library not loaded: @rpath/libgdal.35.dylib`
+
 ```{bash eval = FALSE}
       -DHDF4_LIBRARY:FILEPATH=/opt/homebrew/Cellar/hdf4/lib/libhdf4.a \ 
       -DGDAL_ENABLE_DRIVER_HDF4:BOOL=ON \
 ```
+
+A potential 
+
 
 
 According to the instructions, every time I tried something new, it is recommended to 
@@ -136,9 +142,6 @@ echo 'export PATH="/opt/homebrew/Cellar/gdal/3.9.0/lib:$PATH"' >> ~/.zshrc
 echo 'export PATH="/opt/homebrew/bin/proj:$PATH"' >> ~/.zshrc
 
 
-<!-- export LDFLAGS="-L/opt/homebrew/Cellar/gdal-3.8.5/lib" -->
-<!-- export CPPFLAGS="-I/opt/homebrew/Cellar/gdal-3.8.5/lib/include" -->
-<!-- export PKG_CONFIG_PATH="/opt/homebrew/Cellar/gdal-3.8.5/lib/pkgconfig" -->
 ```
 
 
@@ -168,4 +171,10 @@ remotes::install_github("rspatial/terra", configure.args = "--with-proj-lib=$(br
 #install.packages("terra", type = "source", configure.args = "--with-proj-lib=$(brew --prefix)/lib/")
 ```
 
-J240523: The problem persist. I do have `gdal` now and it recognizes it is the 3.9 version. However the relative paths and teh LC_RPATHS are not found. This are the paths that link PROJ library and others. I suspect there is an error in the way I install gdal, it finishe, but it does not create the right links to the dependent libraries.
+J240523: The problem persist. I do have `gdal` now and it recognizes it is the 3.9 version. However the relative paths and the LC_RPATHS are not found. This are the paths that link PROJ library and others. I suspect there is an error in the way I install gdal, it finishes, but it does not create the right links to the dependent libraries.
+
+
+```{zsh}
+gdalinfo --version
+```
+
