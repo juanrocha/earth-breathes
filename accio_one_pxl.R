@@ -24,6 +24,10 @@ pts <- arrow::read_feather("data/25_01_20_hammond_all.feather") |> #skimr::skim(
 pts <- pts |>
     st_transform("ESRI:54008")
 
+# biome sample pxls
+pts <- biome_sample |>
+    st_as_sf(coords = c("x", "y"), crs = "ESRI:54008")
+
 # grd <- read_table(
 #     file = "~/Documents/Projects/DATA/LP_DAAC_Data_Pool/daac_data_download_r/sn_bound_10deg.txt",
 #     skip = 6)
@@ -292,3 +296,15 @@ dlt_df |>
 
 
 out[[1]]
+
+
+### Save to further explore later
+# out: list with ndvi data per pixel
+# pts: df with points by Nielja
+# keys: id of point coordinates
+# dlt_df: df with ews results
+
+save(out, pts, keys, dlt_df, file = "data/dieoffs.Rda")
+
+## Points for sample biomes:
+save(out, pts, keys, file = "data/biome_data.Rda")
