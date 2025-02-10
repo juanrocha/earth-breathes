@@ -101,3 +101,26 @@ fast_ews <- function(x){
 }
 
 safe_delta <- purrr::safely(fast_ews)
+
+
+## Long version of decompose, recover all components:
+decompose_long <- carrier::crate(function(x){
+    x <- x |>
+        # this recover the missing values, complete the time series
+        dplyr::right_join(!!calendar |> dplyr::select(y_j, tid), by = dplyr::join_by("y_j")) |>
+        dplyr::mutate(nans = is.na(ndvi)) |>
+        # interpolate missing values
+        dplyr::mutate(ndvi = imputeTS::na_interpolation(ndvi, "spline"),
+                      id = imputeTS::na_interpolation(id, "linear")) |>
+        dplyr::mutate(tid = as.numeric(tid)) |>
+        # calculate kernel ndvi
+        dplyr::mutate(kndvi = tanh(ndvi^2)) #|>
+        #dplyr::select(-ndvi, -y_j) # can be recovered later
+    res <- x |>
+        tsibble::as_tsibble(index = "tid") |>
+        fabletools::model(feasts::STL(kndvi ~ season(23) + season(45) )) |>
+        fabletools::components()
+
+    x <- dplyr::left_join(x, dplyr::select(res, -.model))
+    return(x)
+})
