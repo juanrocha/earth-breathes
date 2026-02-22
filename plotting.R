@@ -10,8 +10,9 @@ fls |> arrange(desc(modification_time))
 
 load(fls$path[34])
 
+tic()
 out <- map_df(
-    fls,
+    fls$path,
     function(x){
         load(x)
         deltas <- transpose(deltas)
@@ -24,7 +25,7 @@ out <- map_df(
         return(res)
     }, .progress = TRUE
 )
-
+toc() #611s
 
 
 deltas <- transpose(deltas)
@@ -38,10 +39,11 @@ which(!is_ok) |> length() # 408 errors
 deltas <- deltas$result |>
     bind_rows()
 
+tic()
 deltas |>
     left_join(keys |> rownames_to_column("id") |> mutate(id = as.numeric(id))) |>
     ggplot(aes(x,y)) +
     geom_tile(aes(fill = ews_fd)) +
     scale_fill_viridis_c()
-
+toc()
 

@@ -3,7 +3,16 @@ title: "Notes"
 output: html_notebook
 ---
 
+## Running notes
 
+**260220:**
+
+- If you want to plot the full map, you need to extract a tiff file per tile with summary statistics.
+For example number of EWS. Then stich them together and use a downsampling technique to
+plot so the files are manageable (GDAL or stars will do).
+- It would be great to study the effect of data quality on the EWS. The problem is
+I will need to work again with the hdf files and extract quality flags. Perhaps use `zarr`
+and optimize for time series instead of netcdf? -- Do it in Runa.
 
 ## Data
 
