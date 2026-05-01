@@ -5,6 +5,13 @@ output: html_notebook
 
 ## Running notes
 
+**20260501:**
+
+- `tiling_quality_flags.R` can be used to remove low quality values. One option is to remove them from the final product. Another, more intersting, is to account for it before and after the analysis, to distinguish pixels where quality is high versus places where quality may induce errors. 
+- New versions of `stars` and `terra` working well with hdf files. 
+- First replicate Nielja's paper 1.
+- Calculate how bat it is using only high quality values. How many missing values are created or that need to be interpolated. I could either interpolate myself, or use the estimate from MODIS, but being clear that risk of false positives are induced due to interpolation increase correlation.
+
 **260220:**
 
 - If you want to plot the full map, you need to extract a tiff file per tile with summary statistics.
